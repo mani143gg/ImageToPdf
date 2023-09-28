@@ -1,7 +1,12 @@
 var express = require('express');
 var router = express.Router();
 var path = require('path');
+var fs = require('fs');
 var multer = require('multer');
+
+//import PDFkit
+var PDFDocument = require('pdfkit');
+
 
 /* Open Index.html */
 router.get('/', function(req, res, next) {
@@ -14,7 +19,27 @@ router.get('/', function(req, res, next) {
 	}
 }); 
 
-
+router.post('/pdf', function(req, res, next) {
+	let body = req.body
+	
+	//Create a new pdf
+	let doc = new PDFDocument({size: 'A4', autoFirstPage: false}); 
+	let pdfName = 'pdf-' + Date.now() + '.pdf';
+	
+	//store the pdf in the public/pdf folder
+	doc.pipe( fs.createWriteStream( path.join(__dirname, '..',`/public/pdf/${pdfName}` ) ) );
+	
+	//create the pdf pages and add the images
+	for(let name of body){
+		doc.addPage()
+		doc.image(path.join(__dirname, '..',`/public/images/${name}`),20, 20, {width: 555.28, align: 'center', valign: 'center'} )
+	}
+	//end the process
+	doc.end();
+	
+    //send the address back to the browser
+	res.send(`/pdf/${pdfName}`)
+})
 
 //multer file storage configuration
 let storage = multer.diskStorage({
@@ -52,10 +77,26 @@ router.post('/upload', upload.array('images'), function (req, res){
 		imgNames.push( Object.values(i)[index] )
 	}
 	//store the image filenames in a session
-	req.session.imagefiles = imgNames
+	req.session.imagefiles = imgNames;
 		
     //redirect the request to the root URL route
 	res.redirect('/')
 })
 
+router.get('/new', function(req, res, next) {
+	//delete the files stored in the session
+	let filenames = req.session.imagefiles;
+    
+	let deleteFiles = async (paths) => {
+		let deleting = paths.map( (file) => unlink(path.join(__dirname, '..', `/public/images/${file}`) ) )
+		await Promise.all(deleting)
+	}
+	deleteFiles(filenames)
+	
+	//remove the data from the session
+	req.session.imagefiles = undefined
+    
+	//redirect to the root URL
+	res.redirect('/')
+})
 module.exports = router;
